@@ -120,9 +120,17 @@ class ResultExecutionListener < ExecutionListener
 		end
 		
 		if stopped_programs.length == 0 
-			puts("#{all_programs_str} still running - its a tie")
+			if @program_ids.length == 1
+				puts("The program is still running - nice!")
+			else
+				puts("#{all_programs_str} still running - its a tie")
+			end
 		elsif active_programs.length == 0
-			puts("#{all_programs_str} stopped - its a tie")
+			if @program_ids.length == 1
+				puts("The program has stopped - too bad...")
+			else
+				puts("#{all_programs_str} stopped - its a tie")
+			end
 		elsif active_programs.length == 1
 			program_id = active_programs[0]
 			info = @program_infos[program_id]
