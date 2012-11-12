@@ -6,3 +6,5 @@ pandemia* is a programming game very similar to the classic programming challang
 Hopefully at least some of my friends will take some time to write their own viruses and join up for a tournament!
 
 Read more on the wiki: https://github.com/mrtoby/pandemia/wiki
+
+pandemia* by Tobias Wahlström is licensed under a Creative Commons Attribution-ShareAlike 3.0 Unported License, see http://creativecommons.org/licenses/by-sa/3.0/deed.en_GB
