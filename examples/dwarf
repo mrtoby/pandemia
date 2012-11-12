@@ -1,0 +1,12 @@
+; This is the "Dwarf" program for pandemia*
+; Original version written in redcode for core wars by A. K. Dewdney, 1984
+;
+; This program will "bomb" a data instruction into the memory at address
+; that are multiples of 4 away from the ptr itself. It will eventually
+; overwrite the ptr itself, but since the data value is zero it will just
+; start over. It has no protection agains attacks though...
+
+start:		@_ptr += 4
+			@@_ptr = 0
+			jump start          
+_ptr:		data 0

@@ -1,0 +1,10 @@
+; This is the "Imp" program for pandemia*
+; Original version written in redcode for core wars by A. K. Dewdney, 1984
+;
+; The idea is that it copies itself one step ahead and then executes the
+; new copy, and so on. The program travels around in memory step-by-step.
+; It can not terminate other programs but it might make other programs
+; start acting the same way.
+
+start:		@next = @start
+next:		nop

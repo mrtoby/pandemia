@@ -1,0 +1,16 @@
+; This is the "Mice" program for pandemia*
+; Original version written in redcode for core wars by Chip Wendell, 1986
+;
+; The program copies itself and fork a new thread. 
+
+_ptr:		data 0
+start:		@_ptr = 12
+clone:		@@_copy = @@_ptr
+			@_copy -= 1
+			@_ptr -= 1
+			jump clone if @_ptr != 0
+			@_copy += 4
+			fork @_copy
+			@_copy += 653
+			jump start if @_ptr == 0
+_copy:		data 832

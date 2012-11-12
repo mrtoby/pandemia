@@ -1,0 +1,15 @@
+; This is the "Juggernaut" program for pandemia*
+; Original version written in redcode for core wars by A. K. Dewdney, 1984
+;
+; This program is pretty similar to the Gemini. It copies itself ahead in memory
+; and will finally jump to the new position.
+
+_src:		data 8				; Last instruction in current location
+_dst:		data 16				; Last instruction in new location
+start:		@@_dst = @@_src
+			@_dst -= 1
+			@_src -= 1
+			jump start if @_src > 0
+			@3 = 8				; Set variable values before jump,
+			@3 = 16				; since they are copied while beeing in use.
+			jump 3				; Go to new location (jump over data)
