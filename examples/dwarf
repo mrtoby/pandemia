@@ -7,6 +7,6 @@
 ; start over. It has no protection agains attacks though...
 
 start:		@_ptr += 4
-		@@_ptr = 0
-		jump start          
+			@@_ptr = 0
+			jump start          
 _ptr:		data 0

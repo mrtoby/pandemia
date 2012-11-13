@@ -72,12 +72,10 @@ class Machine
 			
 			_locate_programs_and_create_threads(context)
 			_run(context)
-			reset()
 			if not(listener.nil?)
 				listener.on_execution_completed()
 			end			
 		rescue Exception => e
-			reset()
 			if not(listener.nil?)
 				listener.on_execution_completed()
 			end

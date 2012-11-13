@@ -19,7 +19,7 @@ require 'optparse'
 require 'machine.rb'
 require 'compiler.rb'
 require 'tournament.rb'
-require 'listener_imps.rb'
+require 'listener.rb'
 
 class Pandemia
 
@@ -61,6 +61,7 @@ class Pandemia
 		# predefined variables set up properly.
 		compiler = create_compiler(options)		
 		compiler.add_predefined_symbol("VIRUSES", 1)
+		compiler.add_predefined_symbol("ROUNDS", 1)
 		
 		compiled_program = compiler.compile_file(virus_file)
 		if compiler.warnings > 0
@@ -91,6 +92,7 @@ class Pandemia
 		vm = create_vm(options)
 		compiler = create_compiler(options)
 		compiler.add_predefined_symbol("VIRUSES", virus_files.length)
+		compiler.add_predefined_symbol("ROUNDS", 1)
 
 		# Compile all viruses
 		virus_files.each do |virus_file|
@@ -125,6 +127,7 @@ class Pandemia
 		
 		compiler = create_compiler(options)
 		compiler.add_predefined_symbol("VIRUSES", options[:viruses_per_match])
+		compiler.add_predefined_symbol("ROUNDS", options[:rounds_per_setup])
 		
 		tournament = Tournament.new()
 		Tournament.viruses_per_match = options[:viruses_per_match]

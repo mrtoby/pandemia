@@ -208,13 +208,24 @@ class Compiler
 				# make sure that the line numbers are preserved.
 				result_lines.push('')
 			else
-				result = line.match(/^(\w+)\s*\:\s*(.*)$/)
-				if result
-					# We found a label, save it and keep the statement without
-					# the label. And increase the address.
+				if line.match(/^(\w+)\s*\:\s*def\s*(.*)$/)
+					# We found a defined symbol, save it and replace it
+					# with an empty line.
+					if $2.length == 0
+						_error("Empty symbol : #{$1}")
+					else
+						_add_symbol($1, $2)
+					end
+					result_lines.push('')
+				elsif line.match(/^(\w+)\s*\:\s*(.*)$/)
+					# We found a label
 					_add_label($1, @address)
-					result_lines.push($2)
-					@address += 1
+					if $2.length == 0
+						result_lines.push('')
+					else
+						result_lines.push($2)
+						@address += 1
+					end
 				else
 					# No match, this must be a statement without a label.
 					# Keep it and increase the address
@@ -303,36 +314,63 @@ class Compiler
 			return rel_address
 		elsif _has_symbol?(expr)
 			# A symbol
-			return _get_symbol_value(expr)
+			value = _get_symbol_value(expr)
+			if value.class == String
+				# Evaluate string here!
+				return _parse_numeric_value(value, false)
+			else
+				return value
+			end
 		else
 			_error("Expected number or label: '#{expr}'")
 			return 0
 		end
 	end
+
+	# Helper for _parse_param_value_ref and _parse_param_value
+	def _parse_param(expr, is_value_ref)
+		# Save expression
+		orig_expr = expr
+	
+		# Parse dereference
+		dereference_count = 0
+		if expr.match(/^\s*(\@{0,2})(.*)$/)
+			dereference_count = $1.length
+			expr = $2
+		end
+		
+		# Expand symbol, if any.
+		if _has_symbol?(expr)
+			value = _get_symbol_value(expr)
+			expr = value.to_s()
+		end
+
+		if expr.match(/^(r|s)(\d{1,2})$/)
+			return _create_register_param($2.to_i(), $1.eql?("s"), dereference_count)
+		elsif dereference_count > 0
+			return _create_literal_param(_parse_numeric_value(expr, true), dereference_count)
+		elsif is_value_ref
+			# Require value ref
+			expanded = ("@" * dereference_count) + expr
+			_error("Expect memory reference or register, not: '#{orig_expr}' (expanded to: '#{expanded}')")
+			return _create_register_param(1, false, 0) # May not be reached...
+		else
+			# Not a value ref
+			return _create_literal_param(_parse_numeric_value(expr, false), 0)
+		end
+	end
+
 	
 	# Parse the given expression and return a parameter that can be used
 	# at least for reading a value (but not necessarily for writing)
 	def _parse_value_param(expr)
-		if expr.match(/^(\@{0,2})(r|s)(\d{1,2})$/)
-			return _create_register_param($3.to_i(), $2.eql?("s"), $1.length)
-		elsif expr.match(/^(\@{1,2})(.+)$/)
-			return _create_literal_param(_parse_numeric_value($2, true), $1.length)
-		else
-			return _create_literal_param(_parse_numeric_value(expr, false), 0)
-		end
+		return _parse_param(expr, false)
 	end
 	
 	# Parse the given expression and return a parameter that can be used
 	# for writing a value
 	def _parse_value_ref_param(expr)
-		if expr.match(/^(\@{0,2})(r|s)(\d{1,2})$/)
-			return _create_register_param($3.to_i(), $2.eql?("s"), $1.length)
-		elsif expr.match(/^(\@{1,2})(.+)$/)
-			return _create_literal_param(_parse_numeric_value($2, true), $1.length)
-		else
-			_error("Expect memory reference or register, not: '#{expr}'")
-			return _create_register_param(1, false, 0) # May not be reached...
-		end
+		return _parse_param(expr, true)
 	end
 
 	# Parse a data value for declared data
@@ -426,7 +464,7 @@ class Compiler
 	# Check if the passed string is a keyword, e.g. register identifiers
 	# textual parts of statements etc.
 	def _is_keyword?(str)
-		return str.match(/^[rs]\d{1,2}$/) || str.match(/^(jump|if|fork|data|nop)$/)
+		return str.match(/^[rs]\d{1,2}$/) || str.match(/^(jump|if|fork|data|nop|def)$/)
 	end
 	
 	# Add a label to the lookup table
