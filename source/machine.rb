@@ -178,7 +178,7 @@ class Machine
 	# the global limits.
 	class Context
 		
-		attr_reader :listener, :curr_program_id, :curr_thread_id
+		attr_reader :listener, :curr_program, :curr_program_id, :curr_thread, :curr_thread_id
 		
 		# Create a context
 		#
@@ -192,6 +192,8 @@ class Machine
 			@memory = memory
 			@memory_size = memory.length
 			@listener = listener
+			@curr_program = nil
+			@curr_thread = nil
 			@curr_program_id = nil
 			@curr_thread_id = nil
 		end
@@ -199,9 +201,24 @@ class Machine
 		# Set the current scope, i.e. program and thread id. Can be accessed 
 		# with +curr_program_id+ and +program_id+. It is ok to pass a nil 
 		# value as thread id before any threads has been created.
-		def set_curr_scope(program_id, thread_id = nil)
-			@curr_program_id = program_id
-			@curr_thread_id = thread_id
+		def set_curr_scope(program, thread = nil)
+			@curr_program = program
+			@curr_program_id = program.program_id
+			if thread.nil?
+				@curr_thread = nil
+				@curr_thread_id = nil
+			else
+				@curr_thread = thread
+				@curr_thread_id = thread.thread_id
+			end
+		end
+		
+		# Clear the current scope
+		def clear_curr_scope()
+			@curr_program = nil
+			@curr_program_id = nil
+			@curr_thread = nil
+			@curr_thread_id = nil
 		end
 		
 		# Wrap the passed absolute memory offset to an offset that will fit
@@ -287,7 +304,7 @@ class Machine
 	# having any threads.
 	class Program
 	
-		attr_reader :name, :program_id, :start_offset
+		attr_reader :name, :program_id, :start_offset, :registers
 	
 		# Create a new program. No thread will be created and the instructions will
 		# not be copied to memory. The user of this class will have to do this
@@ -304,6 +321,7 @@ class Machine
 			@threads = Array.new()
 			@running = false
 			@program_id = program_id
+			@registers = Array.new(16, 0)
 		end
 		
 		# Get the length of the program
@@ -319,8 +337,9 @@ class Machine
 		# Write instructions to the memory in the virtual machine context at the
 		# specified offset.
 		def write_instructions(context, offset)
-			context.set_curr_scope(@program_id)
+			context.set_curr_scope(self)
 			context.write_mem(offset, @instructions)
+			context.clear_curr_scope()
 			return nil
 		end
 
@@ -358,8 +377,9 @@ class Machine
 		def run_single_instruction(context)
 			if @threads.length > 0
 				thread = @threads.shift()
-				context.set_curr_scope(@program_id, thread.thread_id)
+				context.set_curr_scope(self, thread)
 				result = thread.run_single_instruction(context, self)
+				context.clear_curr_scope()
 				if result
 					@threads.push(thread)
 					return true
@@ -418,10 +438,18 @@ class Machine
 						# Note: Registers can hold values directly without the
 						#       data instruction prefix. But they can also 
 						#       hold instructions, both are 32-bit.
-						@registers[register - 1] = value & 0xffffffff
+						if register > 16
+							@context.program.registers[registers - 17] = value & 0xffffffff
+						else
+							@registers[register - 1] = value & 0xffffffff
+						end
 						return true
 					end
-					offset = @registers[register - 1]
+					if register > 16
+						offset = @context.program.registers[registers - 17]
+					else
+						offset = @registers[register - 1]
+					end
 				end
 				if dereference_count == 2
 					ptr_address = @context.wrap_address(@pc + offset)
@@ -464,7 +492,11 @@ class Machine
 				else
 					# Register param
 					register = MachineCode.get_param_register_number(param)
-					value_or_offset = @registers[register - 1]
+					if register > 16
+						value_or_offset = @context.program.registers[registers - 17]
+					else
+						value_or_offset = @registers[register - 1]
+					end
 				end
 				# We do not actually care if the instruction is a data
 				# instruction or not
@@ -604,10 +636,20 @@ class Machine
 					else
 						@pc = next_pc
 					end
-				when MachineCode::RESERVED
-					# Illegal to run this!
-					@context = nil
-					return false
+				when MachineCode::DEC_JUMP_NOT_ZERO
+					# Decrement
+					value = get_param_value(param_a) - 1
+					if not(set_param_data_value(param_a, value))
+						# Not able to assign
+						@context = nil
+						return false
+					end
+					# Check and jump
+					if value != 0
+						@pc = context.wrap_address(@pc + get_param_data_value(param_b))
+					else
+						@pc = next_pc
+					end
 				when MachineCode::FORK
 					new_thread_pc = context.wrap_address(@pc + get_param_data_value(param_b))
 					thread = program.create_thread(context, new_thread_pc, self)

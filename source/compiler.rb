@@ -114,8 +114,8 @@ class Compiler
 				return "jump " + _decompile_param(b) + " if " + _decompile_param(a) + " < 0"
 			when MachineCode::JUMP_GT_ZERO
 				return "jump " + _decompile_param(b) + " if " + _decompile_param(a) + " > 0"
-			when MachineCode::RESERVED
-				return "data 0"
+			when MachineCode::DEC_JUMP_NOT_ZERO
+				return "jump " + _decompile_param(b) + " if --" + _decompile_param(a) + " != 0"
 			when MachineCode::FORK
 				return "fork " + _decompile_param(b)
 			else
@@ -135,7 +135,12 @@ class Compiler
 			return prefix + MachineCode.get_param_literal_value(param).to_s
 		else
 			# Register parameter
-			return prefix + "r" + MachineCode.get_param_register_number(param).to_s
+			registerNumber = MachineCode.get_param_register_number(param)
+			if registerNumber > 16
+				return prefix + "s" + (registerNumber - 16).to_s
+			else
+				return prefix + "r" + registerNumber.to_s
+			end
 		end
 	end
 	
@@ -198,14 +203,14 @@ class Compiler
 	end
 		
 	# Create and return a register parameter
-	def _create_register_param(register_number, dereference_count)
+	def _create_register_param(register_number, shared_register, dereference_count)
 		if register_number < 1 or register_number > 16
 			_error("Register number out of range [1, 16]: #{register_number}")
 			return MachineCode.createRegisterParam(1, 0)
-		elsif dereference_count == 2
-			_error("Makes no sence to do a indirect reference using a register")
-			return MachineCode.create_register_param(1, 0)
 		else
+			if shared_register
+				register_number += 16
+			end
 			return MachineCode.create_register_param(register_number, dereference_count)
 		end
 	end
@@ -271,8 +276,8 @@ class Compiler
 	# Parse the given expression and return a parameter that can be used
 	# at least for reading a value (but not necessarily for writing)
 	def _parse_value_param(expr)
-		if expr.match(/^(\@{0,2})r(\d{1,2})$/)
-			return _create_register_param($2.to_i(), $1.length)
+		if expr.match(/^(\@{0,2})(r|s)(\d{1,2})$/)
+			return _create_register_param($3.to_i(), $2.eql?("s"), $1.length)
 		elsif expr.match(/^(\@{1,2})(.+)$/)
 			return _create_literal_param(_parse_numeric_value($2, true), $1.length)
 		else
@@ -283,13 +288,13 @@ class Compiler
 	# Parse the given expression and return a parameter that can be used
 	# for writing a value
 	def _parse_value_ref_param(expr)
-		if expr.match(/^(\@{0,2})r(\d{1,2})$/)
-			return _create_register_param($2.to_i(), $1.length)
+		if expr.match(/^(\@{0,2})(r|s)(\d{1,2})$/)
+			return _create_register_param($3.to_i(), $2.eql?("s"), $1.length)
 		elsif expr.match(/^(\@{1,2})(.+)$/)
 			return _create_literal_param(_parse_numeric_value($2, true), $1.length)
 		else
 			_error("Expect memory reference or register, not: '#{expr}'")
-			return _create_register_param(1, 0) # May not be reached...
+			return _create_register_param(1, false, 0) # May not be reached...
 		end
 	end
 
@@ -312,6 +317,12 @@ class Compiler
 				MachineCode::NOP, 
 				MachineCode::create_literal_param(0, 0), 
 				MachineCode::create_literal_param(0, 0))
+		elsif stmt.match(/^jump\s(.+?)\sif\s--(.+?)\s?\!\=\s?0$/)
+			# Decrement and jump
+			return MachineCode::create_instruction(
+				MachineCode::DEC_JUMP_NOT_ZERO,
+				_parse_value_ref_param($2), # Value ref to decrement and compare before jump
+				_parse_value_param($1)) # Jump address
 		elsif stmt.match(/^jump\s(.+?)\sif\s(.+?)\s?(\=\=|\!\=|\<|\>)\s?0$/)
 			# Conditional jump
 			return MachineCode::create_instruction(

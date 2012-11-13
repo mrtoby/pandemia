@@ -14,7 +14,8 @@ require 'compiler.rb'
 
 class PrintingExecutionListener < ExecutionListener
 
-	def initialize()
+	def initialize(verbose)
+		@verbose = verbose
 		@instruction_count = 0
 		@compiler = Compiler.new()
 		@just_fetched_instruction_at = -1
@@ -46,16 +47,20 @@ class PrintingExecutionListener < ExecutionListener
 	end
 	
 	def on_mem_read(program_id, thread_id, address)
-		if @just_fetched_instruction_at != address
-			value = @memory[address]
-			puts("Read mem[0x%04x] => 0x%08x" % [ address, value ])
+		if @verbose
+			if @just_fetched_instruction_at != address
+				value = @memory[address]
+				puts("Read mem[0x%04x] => 0x%08x" % [ address, value ])
+			end
 		end
 		@just_fetched_instruction_at = -1
 	end
 
 	def on_mem_write(program_id, thread_id, address)
-		value = @memory[address]
-		puts("Wrote mem[0x%04x] <= 0x%08x" % [ address, value ])
+		if @verbose
+			value = @memory[address]
+			puts("Wrote mem[0x%04x] <= 0x%08x" % [ address, value ])
+		end
 	end
 	
 	def on_fetch_instruction(program_id, thread_id, address)
@@ -82,8 +87,8 @@ class ResultExecutionListener < ExecutionListener
 		
 	end
 
-	def initialize(brief)
-		@brief = brief
+	def initialize(verbose)
+		@verbose = verbose
 		@program_infos = Hash.new()
 		@program_ids = Array.new()
 	end
@@ -99,7 +104,7 @@ class ResultExecutionListener < ExecutionListener
 		
 		@program_ids.each do |program_id|
 			info = @program_infos[program_id]
-			if not(@brief)
+			if @verbose
 				puts("Program #{program_id}:#{info.name}")
 				puts("\tThreads on completion: #{info.thread_count}")
 				puts("\tTop number of threads: #{info.max_thread_count}")

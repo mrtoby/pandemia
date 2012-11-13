@@ -99,15 +99,15 @@ class Pandemia
 		listener = nil
 		if debug
 			if options[:verbose]
-				listener = PrintingExecutionListener.new()
+				listener = PrintingExecutionListener.new(true)
 			else
-				listener = ResultExecutionListener.new(false)
+				listener = PrintingExecutionListener.new(false)
 			end
 		else
 			if options[:verbose]
-				listener = ResultExecutionListener.new(false)
-			else
 				listener = ResultExecutionListener.new(true)
+			else
+				listener = ResultExecutionListener.new(false)
 			end
 		end
 		vm.run(listener)

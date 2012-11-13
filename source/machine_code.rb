@@ -27,7 +27,7 @@ module MachineCode
 	JUMP_NOT_ZERO = 11
 	JUMP_LT_ZERO = 12
 	JUMP_GT_ZERO = 13
-	RESERVED = 14
+	DEC_JUMP_NOT_ZERO = 14
 	FORK = 15
 
 	# Create and return the instruction specified by the arguments.
@@ -62,13 +62,14 @@ module MachineCode
 	# Create and return a register parameter
 	def self.create_register_param(register_number, dereference_count)
 		if dereference_count == 0
-			# Top bits should be 010
-			return 0x1000 | ((register_number - 1) & 0xf)
+			# Top bits should be 01.00
+			return 0x1000 | ((register_number - 1) & 0x1f)
 		elsif dereference_count == 1
-			# Top bits should be 011
-			return 0x1800 | ((register_number - 1) & 0xf)
+			# Top bits should be 01.01
+			return 0x1400 | ((register_number - 1) & 0x1f)
 		else
-			raise "Not supported dereference count: #{dereference_count}"
+			# Top bits should be 01.1x
+			return 0x1800 | ((register_number - 1) & 0x1f)
 		end
 	end
 
@@ -110,7 +111,7 @@ module MachineCode
 
 	# Get the register number
 	def self.get_param_register_number(param)
-		return (param & 0xf) + 1
+		return (param & 0x1f) + 1
 	end
 	
 	# Get the literal value number
@@ -131,11 +132,14 @@ module MachineCode
 			# A plain literal value
 			return 0
 		elsif first_two_bits == 0x1000
-			# A register value
-			if (param & 0x3800) == 0x1000
+			# A register value, and some dereferencing!?
+			case (param & 0x3c00)
+			when 0x1000
 				return 0
-			else
+			when 0x1400
 				return 1
+			else
+				return 2
 			end
 		elsif first_two_bits == 0x2000
 			# Direct memory access
