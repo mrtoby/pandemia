@@ -317,8 +317,11 @@ class Compiler
 				MachineCode::NOP, 
 				MachineCode::create_literal_param(0, 0), 
 				MachineCode::create_literal_param(0, 0))
-		elsif stmt.match(/^jump\s(.+?)\sif\s--(.+?)\s?\!\=\s?0$/)
+		elsif stmt.match(/^jump\s(.+?)\sif\s--(.+?)\s?(\=\=|\!\=|\<|\>)\s?0$/)
 			# Decrement and jump
+			if not($3.eql?("!="))
+				_error("Decrement and jump can only be used with condition: != 0")
+			end
 			return MachineCode::create_instruction(
 				MachineCode::DEC_JUMP_NOT_ZERO,
 				_parse_value_ref_param($2), # Value ref to decrement and compare before jump
