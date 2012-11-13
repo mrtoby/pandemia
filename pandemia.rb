@@ -18,36 +18,35 @@ require 'optparse'
 
 require 'machine.rb'
 require 'compiler.rb'
+require 'tournament.rb'
 require 'listener_imps.rb'
 
 class Pandemia
 
-	# Create a new virtual machine with the configuration defined by the
-	# options
+	# Create a new virtual machine with the configuration defined by the options
 	def self.create_vm(options)
 		vm = Machine.new()
 		
-		if options[:memory_size]
-			vm.memory_size = options[:memory_size]
-		end
-		
-		if options[:max_threads]
-			vm.max_threads = options[:max_threads]
-		end
-
-		if options[:cycles_to_completion]
-			vm.cycles_to_completion = options[:cycles_to_completion]
-		end
-
-		if options[:max_program_length]
-			vm.max_program_length = options[:max_program_length]
-		end
-		
-		if options[:min_program_distance]
-			vm.min_program_distance = options[:min_program_distance]
-		end
+		vm.memory_size = options[:memory_size]
+		vm.max_threads = options[:max_threads]
+		vm.cycles_to_completion = options[:cycles_to_completion]
+		vm.max_program_length = options[:max_program_length]
+		vm.min_program_distance = options[:min_program_distance]
 		
 		return vm
+	end
+
+	# Create a new compiler with the configuration defined by the options
+	def self.create_compiler(options)
+		compiler = Compiler.new()
+		
+		compiler.add_predefined_symbol("MEM_SIZE", options[:memory_size])
+		compiler.add_predefined_symbol("MAX_THREADS", options[:max_threads])
+		compiler.add_predefined_symbol("MAX_CYCLES", options[:cycles_to_completion])
+		compiler.add_predefined_symbol("MAX_LENGTH", options[:max_program_length])
+		compiler.add_predefined_symbol("MIN_DISTANCE", options[:min_program_distance])
+		
+		return compiler
 	end
 
 	# Verify the passed virus file (expect an array with a single one)
@@ -58,8 +57,12 @@ class Pandemia
 		end
 		virus_file = virus_files[0]
 		
-		compiler = Compiler.new()
-		start_offset, instructions = compiler.compile_file(virus_file)
+		# We only need the compiler, but create both to get the 
+		# predefined variables set up properly.
+		compiler = create_compiler(options)		
+		compiler.add_predefined_symbol("VIRUSES", 1)
+		
+		compiled_program = compiler.compile_file(virus_file)
 		if compiler.warnings > 0
 			$stderr.puts("Got #{compiler.warnings} warnings")
 		end
@@ -69,12 +72,15 @@ class Pandemia
 		end
 
 		if options[:verbose]
-			puts("Start offset is #{start_offset}")
-			puts("Assembled instructions:")
+			puts("")
+			puts("Start offset is: #{compiled_program.start_offset}")
+			puts("")
+			puts("Offset\tMachine code\tDecompiled")
+			puts("===============================================")
 			address = 0
-			instructions.each do |instruction|
+			compiled_program.instructions.each do |instruction|
 				stmt = compiler.decompile_instruction(instruction)
-				puts("%04d: %08x ; %s" % [address, instruction, stmt])
+				puts("%4d\t%04x.%04x\t%s" % [address, (instruction << 16) & 0xffff, instruction & 0xffff, stmt])
 				address += 1
 			end
 		end
@@ -82,17 +88,18 @@ class Pandemia
 
 	# Run a single match with the passed array of virus files.
 	def self.run_single_match(options, virus_files, debug)
-		compiler = Compiler.new()
 		vm = create_vm(options)
+		compiler = create_compiler(options)
+		compiler.add_predefined_symbol("VIRUSES", virus_files.length)
 
 		# Compile all viruses
 		virus_files.each do |virus_file|
-			start_offset, instructions = compiler.compile_file(virus_file)
+			compiled_program = compiler.compile_file(virus_file)
 			if compiler.errors > 0
 				$stderr.puts("Failed to compile: #{virus_file}")
 				exit 1
 			end
-			vm.add_program(File.basename(virus_file), instructions, start_offset)
+			vm.add_program(File.basename(virus_file), compiled_program)
 		end
 
 		# Start running
@@ -114,14 +121,42 @@ class Pandemia
 	end
 
 	def self.tournament(options, virus_files)
-		$stderr.puts("Not implemented")
-		exit(1)
+		vm = create_vm(options)
+		
+		compiler = create_compiler(options)
+		compiler.add_predefined_symbol("VIRUSES", options[:viruses_per_match])
+		
+		tournament = Tournament.new()
+		Tournament.viruses_per_match = options[:viruses_per_match]
+		Tournament.rounds_per_setup = options[:rounds_per_setup]
+		
+		# Compile all viruses
+		virus_files.each do |virus_file|
+			compiled_program = compiler.compile_file(virus_file)
+			if compiler.errors > 0
+				$stderr.puts("Failed to compile: #{virus_file}")
+				exit 1
+			end
+			tournament.add_program(File.basename(virus_file), compiled_program)
+		end
+
+		# Start running
+		tournament.run(vm);
 	end
 
-
 	def self.run(argv)
-		# Parse options
+	
+		# Set default values for options
 		options = Hash.new()
+		options[:memory_size] = Machine::DEFAULT_MEMORY_SIZE
+		options[:max_threads] = Machine::DEFAULT_MAX_THEADS
+		options[:cycles_to_completion] = Machine::DEFAULT_CYCLES_TO_COMPLETION
+		options[:max_program_length] = Machine::DEFAULT_MAX_PROGRAM_LENGTH
+		options[:min_program_distance] = Machine::DEFAULT_MIN_PROGRAM_DISTANCE
+		options[:viruses_per_match] = Tournament::DEFAULT_VIRUSES_PER_MATCH
+		options[:rounds_per_setup] = Tournament::ROUNDS_PER_SETUP
+		
+		# Parse options		
 		OptionParser.new do |opts|
 			opts.banner = "Usage: pandemia.rb <action> [options] <input files>...
 

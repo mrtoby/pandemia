@@ -12,7 +12,6 @@
 # see http://creativecommons.org/licenses/by-sa/3.0/deed.en_GB
 
 require 'machine_code.rb'
-require 'listener.rb'
 
 class Machine
 
@@ -26,12 +25,26 @@ class Machine
 	
 	# Create a new virtual machine with default configuration
 	def initialize()
-		reset()		
+		clear_programs()
+		@memory_size = DEFAULT_MEMORY_SIZE
+		@max_threads = DEFAULT_MAX_THEADS
+		@cycles_to_completion = DEFAULT_CYCLES_TO_COMPLETION
+		@max_program_length = DEFAULT_MAX_PROGRAM_LENGTH
+		@min_program_distance = DEFAULT_MIN_PROGRAM_DISTANCE
+	end
+	
+	# Remove all previously added programs
+	def clear_programs()
+		@programs = Array.new()
+		@program_id = 0
 	end
 	
 	# Add a program to the virtual machine
-	def add_program(name, instructions, start_offset)
-		@programs.push(Program.new(@program_id, name, instructions, start_offset))
+	#
+	# +name+:: Some textual representation of the program
+	# +compiledProgram+:: The compiled program as returned by the compiler
+	def add_program(name, compiled_program)
+		@programs.push(Program.new(@program_id, name, compiled_program.instructions, compiled_program.start_offset))
 		@program_id += 1
 		return nil
 	end
@@ -73,19 +86,6 @@ class Machine
 		return nil
 	end
 	
-	# Reset the virtual machine. This will clear all programs
-	# and reset the configuration to default values.
-	def reset()
-		@programs = Array.new()
-		@program_id = 0
-		@memory_size = DEFAULT_MEMORY_SIZE
-		@max_threads = DEFAULT_MAX_THEADS
-		@cycles_to_completion = DEFAULT_CYCLES_TO_COMPLETION
-		@max_program_length = DEFAULT_MAX_PROGRAM_LENGTH
-		@min_program_distance = DEFAULT_MIN_PROGRAM_DISTANCE
-		return nil
-	end
-
 	private
 	
 	# Check the configuration and initialize the memory

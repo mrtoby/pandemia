@@ -19,7 +19,7 @@ class Compiler
   
 	# Create a compiler
 	def initialize()
-		# Nop
+		@predefined_symbols2value = Hash.new()
 	end
 
 	# This is a compiler that given a textfile or string with a plain text 
@@ -27,16 +27,18 @@ class Compiler
 	# that will run in the pandemia* virtual machine. An exception is raised
 	# on failure.
 	#
-	# Returns:
-	# +start_offset+:: The instruction to start executing
-	# +instructions+:: An array of machine code instructions
+	# Returns an instance of Compiler::CompiledProgram
 	#
 	# Parameters:
 	# +program+:: A multi line string with pandemia* code
 	def compile_string(program)
 		lines = program.split(/\n\r/)
-		_clear_labels()
 		@source_name = '<string>'
+		@lineno = 0
+		@errors = 0
+		@warnings = 0		
+		_clear_labels()
+		_clear_symbols()
 
 		instructions = _compile(_preprocess(lines))
 
@@ -45,7 +47,7 @@ class Compiler
 			start_offset = _get_label_address("start")
 		end
 
-		return start_offset, instructions
+		return CompiledProgram.new(start_offset, instructions)
 	end
 
 	# This is a compiler that given a filename will read the contents
@@ -53,9 +55,7 @@ class Compiler
 	# machine code that will run in the pandemia* virtual machine. 
 	# An exception is raised on failure.
 	#
-	# Returns:
-	# +start_offset+:: The instruction to start executing
-	# +instructions+:: An array of machine code instructions
+	# Returns an instance of Compiler::CompiledProgram
 	#
 	# Parameters:
 	# +filename+:: Name of the file to compile
@@ -65,8 +65,12 @@ class Compiler
 		while line = file.gets
 			lines.push(line)
 		end
-		_clear_labels()
 		@source_name = filename
+		@lineno = 0
+		@errors = 0
+		@warnings = 0		
+		_clear_labels()
+		_clear_symbols()
 
 		instructions = _compile(_preprocess(lines))
 
@@ -75,7 +79,7 @@ class Compiler
 			start_offset = _get_label_address("start")
 		end
 
-		return start_offset, instructions
+		return CompiledProgram.new(start_offset, instructions)
 	end
 
 	# Decompile an instruction into a statement that would generate
@@ -123,9 +127,39 @@ class Compiler
 			end
 		end
 	end
+
+	# Add a predefined symbol. Predefined symbols should be uppercase.
+	#
+	# The symbol +OFFSET+ will be defined by the compiler itself and
+	# will be the offset in memory from the first instruction in the
+	# resulting machine code.
+	#
+	# +symbol+:: A string with the name of the symbol
+	# +value+:: The numeric value of the symbol
+	def add_predefined_symbol(symbol, value)
+		if symbol.eql?("OFFSET")
+			raise("The name OFFSET will be defined by the compiler itself")
+		elsif not(@predefined_symbols2value[symbol].nil?)
+			raise("Predefined symbol is already defined: #{symbol}")
+		elsif symbol.match(/^[A-Z_]+$/)
+			@predefined_symbols2value[symbol] = value
+		else
+			raise("Bad name for predefined symbol: #{symbol}")
+		end
+	end
+	
+	class CompiledProgram
+		attr_reader :start_offset, :instructions
+		
+		def initialize(start_offset, instructions)
+			@start_offset = start_offset
+			@instructions = instructions
+		end
+	end
 	
 	private
 
+	
 	# Decompile a parameter value
 	def _decompile_param(param)
 		dereference_count = MachineCode.get_dereference_count(param)
@@ -267,6 +301,9 @@ class Compiler
 			label_address = _get_label_address(expr)
 			rel_address = label_address - @address
 			return rel_address
+		elsif _has_symbol?(expr)
+			# A symbol
+			return _get_symbol_value(expr)
 		else
 			_error("Expected number or label: '#{expr}'")
 			return 0
@@ -371,8 +408,6 @@ class Compiler
 	# Compile the passed array of lines into an array of instructions
 	def _compile(lines)
 		instructions = Array.new()
-		@errors = 0
-		@warnings = 0		
 		@address = 0		
 		lines.length.times do |i|
 			line = lines[i]
@@ -388,13 +423,30 @@ class Compiler
 		return instructions
 	end
 
+	# Check if the passed string is a keyword, e.g. register identifiers
+	# textual parts of statements etc.
+	def _is_keyword?(str)
+		return str.match(/^[rs]\d{1,2}$/) || str.match(/^(jump|if|fork|data|nop)$/)
+	end
+	
 	# Add a label to the lookup table
 	#
 	# +label+:: A string with the name of the label
 	# +address+:: The absolute address of the label (program start is 0)
 	def _add_label(label, address)
-		@label2address[label] = address
-		return nil
+		if _is_keyword?(label)
+			_error("Can not use keyword as label: #{label}")
+			return false
+		elsif _has_symbol?(label)
+			_error("Symbol with same name already defined: #{label}")
+			return false
+		elsif _has_label?(label)
+			_error("Label with same name already defined: #{label}")
+			return false
+		else
+			@label2address[label] = address
+			return true
+		end
 	end
 	
 	# Check if the passed label is in the lookup table
@@ -413,6 +465,62 @@ class Compiler
 		return nil
 	end
 	
+	# Add a symbol to symbol table
+	#
+	# +symbol+:: A string with the name of the symbol
+	# +value+:: The value of the symbol, may be a Proc
+	def _add_symbol(symbol, value)
+		if _is_keyword?(symbol)
+			_error("Can not use keyword as symbol: #{symbol}")
+			return false
+		elsif _has_symbol?(symbol)
+			_error("Symbol with same name already defined: #{symbol}")
+			return false
+		elsif _has_label?(symbol)
+			_error("Label with same name already defined: #{symbol}")
+			return false
+		else
+			@symbol2value[symbol] = value
+			return true
+		end
+		return nil
+	end
+	
+	# Check if the passed symbol is added
+	def _has_symbol?(symbol)
+		return not(@symbol2value[symbol].nil?)
+	end
+
+	# Get the value of passed symbol, if it is undefined nil is returned
+	def _get_symbol_value(symbol)
+		value = @symbol2value[symbol]
+		if value.nil?
+			return nil
+		elsif value.class == Proc
+			return value.call()
+		else
+			return value
+		end
+	end
+	
+	# Clear the symbol table
+	def _clear_symbols()
+		@symbol2value = Hash.new()
+
+		# Add predefined symbols
+		@predefined_symbols2value.each_pair do |k, v|
+			_add_symbol(k, v)
+		end		
+		
+		# Add OFFSET symbol
+		offset = Proc.new() do ||
+			@address
+		end
+		_add_symbol("OFFSET", offset)
+
+		return nil
+	end
+
 	# Call this on errors. The caller should assume that this call will
 	# return, and do something to make the caller happy. The total result
 	# will still fail, but the compiler may choose to show more than one
