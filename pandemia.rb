@@ -4,11 +4,11 @@
 # by core wars. When you want to compile, test or run tournaments you may 
 # use this script.
 #
-# Author::    Tobias Wahlström (mailto:tobias@tanke.se)
-# Copyright:: Copyright (c) 2012 Tobias Wahlström
+# Author::    Tobias Wahlstrï¿½m (mailto:tobias@tanke.se)
+# Copyright:: Copyright (c) 2012 Tobias Wahlstrï¿½m
 # License::   Creative Commons Attribution-ShareAlike 3.0 Unported License
 #
-# pandemia* by Tobias Wahlström is licensed under a Creative Commons Attribution-ShareAlike 3.0 Unported License
+# pandemia* by Tobias Wahlstrï¿½m is licensed under a Creative Commons Attribution-ShareAlike 3.0 Unported License
 # see http://creativecommons.org/licenses/by-sa/3.0/deed.en_GB
 
 # Add the source folder to the search path, if run directly
@@ -107,17 +107,9 @@ class Pandemia
 		# Start running
 		listener = nil
 		if debug
-			if options[:verbose]
-				listener = PrintingExecutionListener.new(true)
-			else
-				listener = PrintingExecutionListener.new(false)
-			end
+			listener = PrintingExecutionListener.new(options[:verbose])
 		else
-			if options[:verbose]
-				listener = ResultExecutionListener.new(true)
-			else
-				listener = ResultExecutionListener.new(false)
-			end
+			listener = ResultExecutionListener.new(options[:verbose])
 		end
 		vm.run(listener)
 	end
