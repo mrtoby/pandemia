@@ -81,7 +81,7 @@ class Pandemia
 			address = 0
 			compiled_program.instructions.each do |instruction|
 				stmt = compiler.decompile_instruction(instruction)
-				puts("%4d\t%04x.%04x\t%s" % [address, (instruction << 16) & 0xffff, instruction & 0xffff, stmt])
+				puts("%4d\t%04x.%04x\t%s" % [address, (instruction >> 16) & 0xffff, instruction & 0xffff, stmt])
 				address += 1
 			end
 		end
@@ -107,14 +107,14 @@ class Pandemia
 		# Start running
 		listener = nil
 		if debug
-			listener = PrintingExecutionListener.new(options[:verbose])
+			listener = PrintingExecutionListener.new(false, options[:verbose])
 		else
-			listener = ResultExecutionListener.new(options[:verbose])
+			listener = ResultExecutionListener.new(false, options[:verbose])
 		end
 		vm.run(listener)
 	end
 
-	def self.tournament(options, virus_files)
+	def self.run_tournament(options, virus_files)
 		vm = create_vm(options)
 		
 		compiler = create_compiler(options)
@@ -122,8 +122,8 @@ class Pandemia
 		compiler.add_predefined_symbol("ROUNDS", options[:rounds_per_setup])
 		
 		tournament = Tournament.new()
-		Tournament.viruses_per_match = options[:viruses_per_match]
-		Tournament.rounds_per_setup = options[:rounds_per_setup]
+		tournament.viruses_per_match = options[:viruses_per_match]
+		tournament.rounds_per_setup = options[:rounds_per_setup]
 		
 		# Compile all viruses
 		virus_files.each do |virus_file|
@@ -185,10 +185,10 @@ Options:"
 			opts.on("-d", "--distance N", OptionParser::DecimalInteger, "Min program distance, default is #{Machine::DEFAULT_MIN_PROGRAM_DISTANCE}") do |n|
 				options[:min_program_distance] = n
 			end
-			opts.on("-n", "--viruses N", OptionParser::DecimalInteger, "Number of viruses per match, default is ?") do |n|
+			opts.on("-n", "--viruses N", OptionParser::DecimalInteger, "Number of viruses per match, default is #{Tournament::DEFAULT_VIRUSES_PER_MATCH}") do |n|
 				options[:viruses_per_match] = n
 			end
-			opts.on("-r", "--rounds N", OptionParser::DecimalInteger, "Number of rounds for each setup, default is ?") do |n|
+			opts.on("-r", "--rounds N", OptionParser::DecimalInteger, "Number of rounds for each setup, default is Tournament::DEFAULT_ROUNDS_PER_SETUP") do |n|
 				options[:rounds_per_permutation] = n
 			end
 			opts.on_tail("-h", "--help", "Show this message") do
@@ -220,7 +220,7 @@ Options:"
 		elsif "run".start_with?(action)
 			run_single_match(options, virus_files, false)
 		elsif "tournament".start_with?(action)
-			tournament(options, virus_files)
+			run_tournament(options, virus_files)
 		else
 			$stderr.puts("Unknown action: #{action}")
 			help()

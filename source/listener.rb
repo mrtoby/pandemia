@@ -17,6 +17,10 @@ class ExecutionListener
 	def initialize()
 		# Nop
 	end
+
+	def reset()
+		# Nop
+	end
 	
 	def on_program_added(program_id, name)
 		# Nop
@@ -59,6 +63,10 @@ class PrintingExecutionListener < ExecutionListener
 
 	def initialize(verbose)
 		@verbose = verbose
+		reset()
+	end
+
+	def reset()
 		@instruction_count = 0
 		@compiler = Compiler.new()
 		@just_fetched_instruction_at = -1
@@ -130,10 +138,25 @@ class ResultExecutionListener < ExecutionListener
 		
 	end
 
-	def initialize(verbose)
+	def initialize(quiet, verbose)
 		@verbose = verbose
+		@quiet = quiet
+		reset()
+	end
+	
+	def reset()
 		@program_infos = Hash.new()
 		@program_ids = Array.new()
+		@won_program_ids = nil
+		@tie = false
+	end
+
+	def is_tie?()
+		return @tie
+	end
+	
+	def is_winner?(program_id)
+		return @won_program_ids.include?(program_id)
 	end
 	
 	def on_program_added(program_id, name)
@@ -160,40 +183,55 @@ class ResultExecutionListener < ExecutionListener
 			end
 		end
 		
-		all_programs_str = "All programs"
-		if @program_ids.length == 1
-			all_programs_str = "The program"
-		elsif @program_ids.length == 2
-			all_programs_str = "Both programs"
-		end
-		
-		if stopped_programs.length == 0 
-			if @program_ids.length == 1
-				puts("The program is still running - nice!")
+
+		if @quiet
+			if (stopped_programs.length == 0) or (active_programs.length == 0)
+				@tie = true
 			else
-				puts("#{all_programs_str} still running - its a tie")
+				@won_program_ids = Array.new(active_programs)
 			end
-		elsif active_programs.length == 0
-			if @program_ids.length == 1
-				puts("The program has stopped - too bad...")
-			else
-				puts("#{all_programs_str} stopped - its a tie")
-			end
-		elsif active_programs.length == 1
-			program_id = active_programs[0]
-			info = @program_infos[program_id]
-			puts("The winner is #{program_id}:#{info.name}")
 		else
-			program_list_str = ""
-			active_programs.each do |prog_id|
-				info = @program_infos[prog_id]
-				if program_list_str.length == 0
-					program_list_str += "#{prog_id}:#{info.name}"
-				else
-					program_list_str += ", #{prog_id}:#{info.name}"
-				end
+			all_programs_str = "All programs"
+			if @program_ids.length == 1
+				all_programs_str = "The program"
+			elsif @program_ids.length == 2
+				all_programs_str = "Both programs"
 			end
-			puts("The winners are: #{program_list_str}")
+
+			if stopped_programs.length == 0
+				unless @quiet
+					if @program_ids.length == 1
+						puts("The program is still running - nice!")
+					else
+						puts("#{all_programs_str} still running - its a tie")
+					end
+				end
+			elsif active_programs.length == 0
+				unless @quiet
+					if @program_ids.length == 1
+						puts("The program has stopped - too bad...")
+					else
+						puts("#{all_programs_str} stopped - its a tie")
+					end
+				end
+			elsif active_programs.length == 1
+				unless @quiet
+					program_id = active_programs[0]
+					info = @program_infos[program_id]
+					puts("The winner is #{program_id}:#{info.name}")
+				end
+			else
+				program_list_str = ""
+				active_programs.each do |prog_id|
+					info = @program_infos[prog_id]
+					if program_list_str.length == 0
+						program_list_str += "#{prog_id}:#{info.name}"
+					else
+						program_list_str += ", #{prog_id}:#{info.name}"
+					end
+				end
+				puts("The winners are: #{program_list_str}")
+			end
 		end
 	end
 

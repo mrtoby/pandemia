@@ -43,9 +43,12 @@ class Machine
 	#
 	# +name+:: Some textual representation of the program
 	# +compiledProgram+:: The compiled program as returned by the compiler
-	def add_program(name, compiled_program)
-		@programs.push(Program.new(@program_id, name, compiled_program.instructions, compiled_program.start_offset))
-		@program_id += 1
+	def add_program(name, compiled_program, program_id = nil)
+		if program_id.nil?
+			program_id = @program_id
+			@program_id += 1
+		end
+		@programs.push(Program.new(program_id, name, compiled_program.instructions, compiled_program.start_offset))
 		return nil
 	end
 

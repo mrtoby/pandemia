@@ -296,35 +296,124 @@ class Compiler
 		end
 	end
 
-	# Parse an expression into a numeric value, the expression can contain
-	# parenthesis, addition, subtraction, labels, literal numbers. 
-	# Labels are evaluated based on the current address.
-	def _parse_numeric_value(expr, should_suggest_parenthesis)
-		# TODO: For now we only support plain labels or numbers
-		if expr.match(/^[+-]*0x[\h]+$/)
-			# Hexadecimal number
-			return expr.hex()
-		elsif expr.match(/^[+-]*\d+$/)
-			# Decimal number
-			return expr.to_i()
-		elsif _has_label?(expr)
-			# A label
-			label_address = _get_label_address(expr)
-			rel_address = label_address - @address
-			return rel_address
-		elsif _has_symbol?(expr)
-			# A symbol
-			value = _get_symbol_value(expr)
-			if value.class == String
-				# Evaluate string here!
-				return _parse_numeric_value(value, false)
+	# Helper for _parse_numeric_value
+	def _parse_numeric_value_atom(expr)
+		if expr.length == 0
+			_error("Unexpected end of expression")
+			return 0, ""
+		elsif expr[0].eql?("(")
+			result, tail = _parse_numeric_value_sums(expr[1..-1])
+			if tail[0].eql?(")")
+				return result, tail[1..-1]
 			else
-				return value
+				_error("Missing right parenthesis at: '#{tail}'")
+				return result, tail
+			end
+		elsif expr.match(/^([+-]*0x[\h]+)(.*)$/)
+			# Hexadecimal number
+			return $1.hex(), $2
+		elsif expr.match(/^([+-]*\d+)(.*)$/)
+			# Decimal number
+			return expr.to_i(), $2
+		elsif expr.match(/^(\w+)(.*)$/)
+			name = $1
+			tail = $2
+			
+			if _has_label?(name)
+				# A label
+				label_address = _get_label_address(name)
+				rel_address = label_address - @address
+				return rel_address, tail
+			elsif _has_symbol?(name)
+				# A symbol
+				value = _get_symbol_value(name)
+				if value.class == String
+					# Evaluate string as a numeric value
+					return _parse_numeric_value(value, false), tail
+				else
+					return value, tail
+				end
+			else
+				_error("Identifier is neither label or symbol: '#{name}'")
+				return 0, tail
 			end
 		else
-			_error("Expected number or label: '#{expr}'")
-			return 0
+			_error("Unknown expression: '#{expr}'")
+			return 0, ""
 		end
+	end
+
+	# Helper for _parse_numeric_value
+	def _parse_numeric_value_factors(expr)
+		# Parse first atom and continue with tail
+		result, tail = _parse_numeric_value_atom(expr)
+		expr = tail
+	   
+		# Parse more factors one by one and combine with + or -
+		while expr.length > 0
+			# Save and check operator
+			operator = expr[0]
+			if not(operator.eql?("*") or operator.eql?("/"))
+				return result, expr
+			end
+		   
+			# Parse next factor
+			value, tail = _parse_numeric_value_atom(expr[1..-1])
+		   
+			# Perform calculation and proceed with rest
+			if operator.eql?("*")
+				result *= value
+			elsif operator.eql?("/")
+				result /= value
+			end
+			expr = tail
+		end
+		return result, expr
+	end
+
+	# Helper for _parse_numeric_value
+	def _parse_numeric_value_sums(expr)
+		# Parse first factor and continue with tail
+		result, tail = _parse_numeric_value_factors(expr)
+		expr = tail
+	   
+		# Parse more factors one by one and combine with + or -
+		while expr.length > 0
+			# Save and check operator
+			operator = expr[0]
+			if not(operator.eql?("+") or operator.eql?("-"))
+				return result, expr
+			end
+		   
+			# Parse next factor
+			value, tail = _parse_numeric_value_factors(expr[1..-1])
+		   
+			# Perform calculation and proceed with rest
+			if operator.eql?("+")
+				result += value
+			elsif operator.eql?("-")
+				result -= value
+			end
+			expr = tail
+		end
+		return result, ""
+	end
+
+	# Parse an expression into a numeric value, the expression can contain
+	# parenthesis, addition, subtraction, labels, symbols and literal numbers. 
+	# Labels are evaluated based on the current address.
+	def _parse_numeric_value(expression, suggest_parethesis)
+		# TODO: Deal with: suggest_parethesis
+
+		# Remove all whitespace
+		expression = expression.gsub(/\s+/, "")
+
+		# Parse
+		result, tail = _parse_numeric_value_sums(expression)
+		if tail.length > 0
+			_error("Expected end of expression, but found: '#{tail}'")
+		end
+		return result
 	end
 
 	# Helper for _parse_param_value_ref and _parse_param_value
