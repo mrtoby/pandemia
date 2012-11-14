@@ -149,7 +149,7 @@ class Pandemia
 		options[:max_program_length] = Machine::DEFAULT_MAX_PROGRAM_LENGTH
 		options[:min_program_distance] = Machine::DEFAULT_MIN_PROGRAM_DISTANCE
 		options[:viruses_per_match] = Tournament::DEFAULT_VIRUSES_PER_MATCH
-		options[:rounds_per_setup] = Tournament::ROUNDS_PER_SETUP
+		options[:rounds_per_setup] = Tournament::DEFAULT_ROUNDS_PER_SETUP
 		
 		# Parse options		
 		OptionParser.new do |opts|
