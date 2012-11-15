@@ -107,7 +107,7 @@ class Pandemia
 		# Start running
 		listener = nil
 		if debug
-			listener = PrintingExecutionListener.new(false, options[:verbose])
+			listener = PrintingExecutionListener.new(options[:verbose])
 		else
 			listener = ResultExecutionListener.new(false, options[:verbose])
 		end

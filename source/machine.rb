@@ -70,7 +70,7 @@ class Machine
 			end
 
 			if not(listener.nil?)
-				listener.on_execution_started(@memory)
+				listener.on_execution_started()
 			end
 			
 			_locate_programs_and_create_threads(context)
@@ -233,12 +233,13 @@ class Machine
 		# The memory offset will be wrapped around to fit the memory size
 		def read_mem(address)
 			address = address % @memory_size
+			value = @memory[address]
 			
 			if not(@listener.nil?) then
-				@listener.on_mem_read(@curr_program_id, @curr_thread_id, address)
+				@listener.on_mem_read(@curr_program_id, @curr_thread_id, address, value)
 			end
 
-			return @memory[address]
+			return value
 		end
 		
 		# Write one or more values to the memory at the given absolute memory
@@ -250,14 +251,14 @@ class Machine
 				# Write a single value
 				@memory[address] = value
 				if not(@listener.nil?) then
-					@listener.on_mem_write(@curr_program_id, @curr_thread_id, address)
+					@listener.on_mem_write(@curr_program_id, @curr_thread_id, address, value)
 				end
 			elsif value.is_a? Array
 				# Write an array of values
 				value.length.times do |i|
 					@memory[address] = value[i]
 					if not(@listener.nil?) then
-						@listener.on_mem_write(@curr_program_id, @curr_thread_id, address)
+						@listener.on_mem_write(@curr_program_id, @curr_thread_id, address,value[i])
 					end
 					address += 1
 					if address >= @memory_size
@@ -419,7 +420,43 @@ class Machine
 				end
 				@pc = pc
 			end
-					
+
+			# Used to set values in registers
+			def _set_register(register, value)
+				reg_value = value & 0xffffffff
+				
+				if not(@context.listener.nil?)
+					@context.listener.on_reg_write(@context.curr_program_id, @thread_id, register, reg_value)
+				end
+
+				if register > 16
+					@context.program.registers[registers - 17] = reg_value
+				else
+					@registers[register - 1] = reg_value
+				end
+			end
+			
+			# Used to get values from registers
+			def _get_register(register)
+				reg_value = 0
+				if register > 16
+					reg_value = @context.program.registers[register - 17]
+				else
+					reg_value = @registers[register - 1]
+				end
+
+				value = reg_value
+				if (reg_value & 0x80000000) != 0
+					# Negative
+					value = -((~reg_value & 0xffffffff) + 1)
+				end
+
+				if not(@context.listener.nil?)
+					@context.listener.on_reg_read(@context.curr_program_id, @thread_id, register, reg_value)
+				end
+				return value
+			end
+			
 			# Helper method for the other two methods that set parameter values.
 			def _set_param_value(param, value, is_data_value)
 				offset = 0
@@ -439,18 +476,10 @@ class Machine
 						# Note: Registers can hold values directly without the
 						#       data instruction prefix. But they can also 
 						#       hold instructions, both are 32-bit.
-						if register > 16
-							@context.program.registers[registers - 17] = value & 0xffffffff
-						else
-							@registers[register - 1] = value & 0xffffffff
-						end
+						_set_register(register, value)
 						return true
 					end
-					if register > 16
-						offset = @context.program.registers[registers - 17]
-					else
-						offset = @registers[register - 1]
-					end
+					offset = _get_register(register)
 				end
 				if dereference_count == 2
 					ptr_address = @context.wrap_address(@pc + offset)
@@ -493,11 +522,7 @@ class Machine
 				else
 					# Register param
 					register = MachineCode.get_param_register_number(param)
-					if register > 16
-						value_or_offset = @context.program.registers[registers - 17]
-					else
-						value_or_offset = @registers[register - 1]
-					end
+					value_or_offset = _get_register(register)
 				end
 				# We do not actually care if the instruction is a data
 				# instruction or not
@@ -539,10 +564,10 @@ class Machine
 			def run_single_instruction(context, program)
 
 				# Fetch instruction
-				if not(context.listener.nil?)
-					context.listener.on_fetch_instruction(context.curr_program_id, @thread_id, @pc)
-				end
 				instruction = context.read_mem(@pc)
+				if not(context.listener.nil?)
+					context.listener.on_fetch_instruction(context.curr_program_id, @thread_id, @pc, instruction)
+				end
 				next_pc = context.wrap_address(@pc + 1)
 				@context = context
 			
@@ -609,7 +634,7 @@ class Machine
 					end
 					@pc = next_pc
 				when MachineCode::COMPARE
-					@registers[0] = get_param_data_value(param_a) <=> get_param_data_value(param_b)
+					_set_register(1, get_param_data_value(param_a) <=> get_param_data_value(param_b))
 					@pc = next_pc
 				when MachineCode::JUMP
 					@pc = context.wrap_address(@pc + get_param_data_value(param_b))
@@ -655,9 +680,9 @@ class Machine
 					new_thread_pc = context.wrap_address(@pc + get_param_data_value(param_b))
 					thread = program.create_thread(context, new_thread_pc, self)
 					if thread.nil?
-						@registers[0] = 0
+						_set_register(1, 0)
 					else
-						@registers[0] = 1
+						_set_register(1, 1)
 					end
 					@pc = next_pc
 				else

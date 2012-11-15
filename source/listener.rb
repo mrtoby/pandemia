@@ -26,7 +26,7 @@ class ExecutionListener
 		# Nop
 	end
 
-	def on_execution_started(memory)
+	def on_execution_started()
 		# Nop
 	end
 	
@@ -46,15 +46,23 @@ class ExecutionListener
 		# Nop
 	end
 	
-	def on_mem_read(program_id, thread_id, address)
+	def on_mem_read(program_id, thread_id, address, value)
 		# Nop
 	end
 	
-	def on_mem_write(program_id, thread_id, address)
+	def on_mem_write(program_id, thread_id, address, value)
+		# Nop
+	end
+
+	def on_reg_write(program_id, thread_id, register, value)
+		# Nop
+	end
+			
+	def on_reg_read(program_id, thread_id, register, value)
 		# Nop
 	end
 	
-	def on_fetch_instruction(program_id, thread_id, address)
+	def on_fetch_instruction(program_id, thread_id, address, value)
 		# Nop
 	end
 end
@@ -69,16 +77,14 @@ class PrintingExecutionListener < ExecutionListener
 	def reset()
 		@instruction_count = 0
 		@compiler = Compiler.new()
-		@just_fetched_instruction_at = -1
 	end
 	
 	def on_program_added(program_id, name)
 		puts("Program added \##{program_id} \"#{name}\"")
 	end
 
-	def on_execution_started(memory)
-		@memory = memory
-		puts("Execution started, memory size is #{memory.length}")
+	def on_execution_started()
+		puts("Execution started")
 	end
 	
 	def on_execution_completed()
@@ -97,29 +103,34 @@ class PrintingExecutionListener < ExecutionListener
 		puts("Thread \##{program_id}:#{thread_id} is terminated")
 	end
 	
-	def on_mem_read(program_id, thread_id, address)
+	def on_mem_read(program_id, thread_id, address, value)
 		if @verbose
-			if @just_fetched_instruction_at != address
-				value = @memory[address]
-				puts("Read mem[0x%04x] => 0x%08x" % [ address, value ])
-			end
+			puts("Read mem[0x%04x] => 0x%08x (%d)" % [ address, value, value ])
 		end
-		@just_fetched_instruction_at = -1
 	end
 
-	def on_mem_write(program_id, thread_id, address)
+	def on_mem_write(program_id, thread_id, address, value)
 		if @verbose
-			value = @memory[address]
-			puts("Wrote mem[0x%04x] <= 0x%08x" % [ address, value ])
+			puts("Wrote mem[0x%04x] <= 0x%08x (%d)" % [ address, value, value ])
 		end
 	end
 	
-	def on_fetch_instruction(program_id, thread_id, address)
-		instruction = @memory[address]
+	def on_reg_write(program_id, thread_id, register, value)
+		if @verbose
+			puts("Wrote reg[%d] <= 0x%08x (%d)" % [ register - 1, value, value ])
+		end
+	end
+			
+	def on_reg_read(program_id, thread_id, register, value)
+		if @verbose
+			puts("Read reg[%d] => 0x%08x (%d)" % [ register - 1, value, value ])
+		end
+	end
+
+	def on_fetch_instruction(program_id, thread_id, address, instruction)
 		decompiled_instruction = @compiler.decompile_instruction(instruction)
 		puts("[%d] Thread \#%d:%d fetched mem[0x%04x] => 0x%08x %s" % [ @instruction_count, program_id, thread_id, address, instruction, decompiled_instruction ])
 		@instruction_count += 1
-		@just_fetched_instruction_at = address
 	end
 end
 
@@ -248,7 +259,7 @@ class ResultExecutionListener < ExecutionListener
 		info.thread_count -= 1
 	end
 	
-	def on_fetch_instruction(program_id, thread_id, address)
+	def on_fetch_instruction(program_id, thread_id, address, value)
 		info = @program_infos[program_id]
 		info.instruction_count += 1		
 	end
